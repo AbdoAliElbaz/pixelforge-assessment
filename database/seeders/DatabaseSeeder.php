@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -64,6 +63,7 @@ class DatabaseSeeder extends Seeder
             'usage' => $usage,
             'provider_cost_nano' => 373_875_000,
             'charge_nano' => 467_343_750,
+            'is_fixture' => true,
             'completed_at' => now(),
             'created_at' => now()->subMinutes(10),
         ]);
@@ -86,6 +86,7 @@ class DatabaseSeeder extends Seeder
             ],
             'provider_cost_nano' => 50_300_000,
             'charge_nano' => 62_875_000,
+            'is_fixture' => true,
             'completed_at' => now()->subDay(),
             'created_at' => now()->subDay(),
         ]);
@@ -102,6 +103,7 @@ class DatabaseSeeder extends Seeder
             'error_code' => 'generation_failed',
             'error_message' => 'The model could not produce an image for the prompt.',
             'rates' => $rates,
+            'is_fixture' => true,
             'completed_at' => now()->subHour(),
             'created_at' => now()->subHour(),
         ]);

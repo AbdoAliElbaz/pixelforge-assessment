@@ -115,10 +115,24 @@ class GenerationService
             'error_message' => $g->error_message,
             'charge' => $g->charge_nano !== null ? Pricing::format($g->charge_nano) : null,
             'provider_cost' => $g->provider_cost_nano !== null ? Pricing::format($g->provider_cost_nano) : null,
-            'image_url' => $g->image_path
-                ? Storage::disk(config('filesystems.generations'))->url($g->image_path)
-                : null,
+            'image_url' => $g->image_path ? $this->imageUrl($g->image_path) : null,
             'created_at' => $g->created_at->toIso8601String(),
         ];
+    }
+
+    /**
+     * Local disks: host-relative /storage/... so APP_URL / artisan-serve port
+     * drift cannot 404 the <img>. Object storage: absolute disk URL.
+     */
+    private function imageUrl(string $path): string
+    {
+        $disk = config('filesystems.generations');
+        $driver = config("filesystems.disks.{$disk}.driver");
+
+        if ($driver === 'local') {
+            return '/storage/'.ltrim($path, '/');
+        }
+
+        return Storage::disk($disk)->url($path);
     }
 }

@@ -10,7 +10,8 @@ class Generation extends Model
     protected $fillable = [
         'user_id', 'pixelforge_id', 'idempotency_key', 'prompt', 'size', 'quality',
         'reference_images', 'status', 'error_code', 'error_message',
-        'rates', 'usage', 'provider_cost_nano', 'charge_nano', 'reserved_nano', 'image_path', 'completed_at',
+        'rates', 'usage', 'provider_cost_nano', 'charge_nano', 'reserved_nano', 'image_path',
+        'is_fixture', 'completed_at',
     ];
 
     protected function casts(): array
@@ -19,6 +20,7 @@ class Generation extends Model
             'reference_images' => 'array',
             'rates' => 'array',
             'usage' => 'array',
+            'is_fixture' => 'boolean',
             'completed_at' => 'datetime',
         ];
     }

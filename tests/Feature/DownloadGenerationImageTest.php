@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\DownloadGenerationImage;
 use App\Models\Generation;
 use App\Models\User;
+use App\Services\PixelforgeClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
@@ -44,7 +45,7 @@ class DownloadGenerationImageTest extends TestCase
         (new DownloadGenerationImage(
             $generation->id,
             'https://pixelforge.promptedit.dev/images/gen_dl_1.png?signature=x',
-        ))->handle(app(\App\Services\PixelforgeClient::class));
+        ))->handle(app(PixelforgeClient::class));
 
         $this->assertNull($generation->refresh()->image_path);
     }
@@ -59,7 +60,7 @@ class DownloadGenerationImageTest extends TestCase
 
         // InteractsWithQueue::fail needs a fake job instance in unit-style calls.
         $job->withFakeQueueInteractions();
-        $job->handle(app(\App\Services\PixelforgeClient::class));
+        $job->handle(app(PixelforgeClient::class));
         $job->assertFailedWith(RuntimeException::class);
 
         Http::assertNothingSent();
@@ -78,7 +79,7 @@ class DownloadGenerationImageTest extends TestCase
         (new DownloadGenerationImage(
             $generation->id,
             'https://pixelforge.promptedit.dev/images/gen_dl_1.png?signature=x',
-        ))->handle(app(\App\Services\PixelforgeClient::class));
+        ))->handle(app(PixelforgeClient::class));
 
         $this->assertSame('generations/gen_dl_1.png', $generation->refresh()->image_path);
         Storage::disk(config('filesystems.generations'))->assertExists('generations/gen_dl_1.png');

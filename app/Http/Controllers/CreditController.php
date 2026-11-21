@@ -13,7 +13,11 @@ class CreditController extends Controller
             'amount' => ['required', 'integer', 'in:'.implode(',', CreditService::AMOUNTS_USD)],
         ]);
 
-        $credits->purchase($request->user(), $data['amount']);
+        $result = $credits->purchase($request->user(), $data['amount']);
+
+        if (! $result['ok']) {
+            return back()->withErrors(['amount' => $result['message']]);
+        }
 
         return back();
     }

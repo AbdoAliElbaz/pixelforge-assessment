@@ -44,7 +44,7 @@ class GenerationSubmitTest extends TestCase
         ],
     ];
 
-    private function fundedUser(): \App\Models\User
+    private function fundedUser(): User
     {
         return User::factory()->create(['balance_nano' => 10_000_000_000]);
     }

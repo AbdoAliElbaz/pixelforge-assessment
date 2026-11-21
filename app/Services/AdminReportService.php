@@ -21,9 +21,12 @@ class AdminReportService
         $since ??= now()->subDays(29)->startOfDay();
         $window = ['start' => $since->toDateString(), 'end' => now()->toDateString()];
 
-        $rows = Generation::query()
+        $billable = fn () => Generation::query()
             ->where('status', 'succeeded')
-            ->where('completed_at', '>=', $since)
+            ->where('is_fixture', false)
+            ->where('completed_at', '>=', $since);
+
+        $rows = $billable()
             ->join('users', 'users.id', '=', 'generations.user_id')
             ->groupByRaw('date(generations.completed_at), generations.user_id')
             ->orderByDesc('day')
@@ -44,11 +47,13 @@ class AdminReportService
                 'profit' => Pricing::format((int) $r->charged_nano - (int) $r->cost_nano),
             ]);
 
-        $oursByDay = Generation::query()
-            ->where('status', 'succeeded')
-            ->where('completed_at', '>=', $since)
+        $oursByDay = $billable()
             ->groupByRaw('date(completed_at)')
             ->pluck(DB::raw('sum(provider_cost_nano)'), DB::raw('date(completed_at)'));
+
+        $oursCountByDay = $billable()
+            ->groupByRaw('date(completed_at)')
+            ->pluck(DB::raw('count(*)'), DB::raw('date(completed_at)'));
 
         $usage = Cache::remember(
             'pixelforge_usage_admin',
@@ -58,16 +63,18 @@ class AdminReportService
 
         $reconciliation = null;
         if ($usage !== null) {
-            $reconciliation = collect($usage['data'] ?? [])->map(function ($day) use ($oursByDay) {
+            $reconciliation = collect($usage['data'] ?? [])->map(function ($day) use ($oursByDay, $oursCountByDay) {
                 $theirs = Pricing::usdToNano($day['cost_usd']);
                 $ours = (int) ($oursByDay[$day['date']] ?? 0);
+                $ourGenerations = (int) ($oursCountByDay[$day['date']] ?? 0);
 
                 return [
                     'day' => $day['date'],
                     'generations' => (int) $day['generations'],
+                    'our_generations' => $ourGenerations,
                     'pixelforge_cost' => Pricing::format($theirs),
                     'our_cost' => Pricing::format($ours),
-                    'matches' => $theirs === $ours,
+                    'matches' => $theirs === $ours && (int) $day['generations'] === $ourGenerations,
                 ];
             })->sortByDesc('day')->values();
         }

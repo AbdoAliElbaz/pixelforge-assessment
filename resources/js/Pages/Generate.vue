@@ -178,17 +178,25 @@ function formatAbsolute(iso) {
                         <p class="text-sm text-gray-500">Your credit balance</p>
                         <p class="text-2xl font-semibold tabular-nums text-gray-900">${{ balance }}</p>
                     </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="text-sm text-gray-500">Buy credits (demo)</span>
-                        <button
-                            v-for="amount in [1, 5, 10]"
-                            :key="amount"
-                            type="button"
-                            class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-                            @click="buyCredits(amount)"
+                    <div class="flex flex-col items-start gap-1 sm:items-end">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-sm text-gray-500">Buy credits (demo)</span>
+                            <button
+                                v-for="amount in [1, 5, 10]"
+                                :key="amount"
+                                type="button"
+                                class="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                                @click="buyCredits(amount)"
+                            >
+                                + ${{ amount }}
+                            </button>
+                        </div>
+                        <p
+                            v-if="page.props.errors?.amount"
+                            class="text-sm text-red-600"
                         >
-                            + ${{ amount }}
-                        </button>
+                            {{ page.props.errors.amount }}
+                        </p>
                     </div>
                 </div>
 

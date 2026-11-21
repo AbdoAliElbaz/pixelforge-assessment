@@ -54,6 +54,7 @@ class PixelforgeClient
                 $wait = min((int) $lastResponse->header('Retry-After', 1), 10);
                 if ($attempt < self::MAX_SUBMIT_ATTEMPTS) {
                     sleep(max(1, $wait));
+
                     continue;
                 }
 

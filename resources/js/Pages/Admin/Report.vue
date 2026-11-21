@@ -56,7 +56,8 @@ function delta(ourCost, pixelforgeCost) {
                     </h3>
                     <p class="mt-1 text-sm text-gray-500">
                         Credit spend is what users were charged; provider cost is what Pixelforge charged us; profit is
-                        the 25% markup. Only succeeded generations appear: failed ones are free.
+                        the 25% markup. Only succeeded, non-fixture generations appear: failed and seeded demo rows are
+                        excluded.
                     </p>
 
                     <div
@@ -116,13 +117,16 @@ function delta(ourCost, pixelforgeCost) {
                     <h3 class="text-lg font-semibold text-gray-800">Reconciliation with Pixelforge (GET /v1/usage)</h3>
                     <p class="mt-1 text-sm text-gray-500">
                         Pixelforge bills a generation on the UTC day it completes, so both sides group by completion day.
+                        Seeded demo fixtures are excluded. Usage is scoped to the shared API key — other environments
+                        using the same key will appear only on the Pixelforge side.
                     </p>
                     <div v-if="reconciliation" class="mt-4 overflow-x-auto">
                         <table class="w-full min-w-[36rem] text-left text-sm">
                             <thead class="sticky top-0 bg-white">
                                 <tr class="border-b border-gray-200 text-gray-500">
                                     <th class="py-2 pr-4 font-medium">Day</th>
-                                    <th class="py-2 pr-4 text-right font-medium">Pixelforge generations</th>
+                                    <th class="py-2 pr-4 text-right font-medium">Pixelforge gens</th>
+                                    <th class="py-2 pr-4 text-right font-medium">Our gens</th>
                                     <th class="py-2 pr-4 text-right font-medium">Pixelforge cost</th>
                                     <th class="py-2 pr-4 text-right font-medium">Our record</th>
                                     <th class="py-2 text-right font-medium">Match</th>
@@ -136,6 +140,7 @@ function delta(ourCost, pixelforgeCost) {
                                 >
                                     <td class="whitespace-nowrap py-2.5 pr-4 text-gray-700">{{ r.day }}</td>
                                     <td class="py-2.5 pr-4 text-right tabular-nums text-gray-700">{{ r.generations }}</td>
+                                    <td class="py-2.5 pr-4 text-right tabular-nums text-gray-700">{{ r.our_generations }}</td>
                                     <td class="py-2.5 pr-4 text-right tabular-nums text-gray-700">${{ r.pixelforge_cost }}</td>
                                     <td class="py-2.5 pr-4 text-right tabular-nums text-gray-900">${{ r.our_cost }}</td>
                                     <td class="py-2.5 text-right">

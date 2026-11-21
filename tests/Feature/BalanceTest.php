@@ -52,7 +52,9 @@ class BalanceTest extends TestCase
         $this->actingAs($user)->post('/credits', ['amount' => 5])->assertRedirect();
         $this->actingAs($user)->post('/credits', ['amount' => 1])->assertRedirect();
 
-        $this->assertSame(6_000_000_000, $user->fresh()->balance_nano);
+        $user->refresh();
+        $this->assertSame(6_000_000_000, $user->balance_nano);
+        $this->assertSame(6, $user->credits_purchased_usd);
     }
 
     public function test_buy_credits_rejects_amounts_outside_the_packs(): void
@@ -62,6 +64,17 @@ class BalanceTest extends TestCase
         $this->actingAs($user)->post('/credits', ['amount' => 3])->assertSessionHasErrors('amount');
 
         $this->assertSame(0, $user->fresh()->balance_nano);
+    }
+
+    public function test_buy_credits_enforces_lifetime_demo_cap(): void
+    {
+        config(['demo.max_credits_purchased_usd' => 10]);
+        $user = User::factory()->create(['credits_purchased_usd' => 10]);
+
+        $this->actingAs($user)->post('/credits', ['amount' => 1])->assertSessionHasErrors('amount');
+
+        $this->assertSame(0, $user->fresh()->balance_nano);
+        $this->assertSame(10, $user->fresh()->credits_purchased_usd);
     }
 
     public function test_submit_is_blocked_when_balance_cannot_cover_the_maximum_estimate(): void

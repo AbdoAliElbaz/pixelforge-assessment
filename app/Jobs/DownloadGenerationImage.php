@@ -40,6 +40,8 @@ class DownloadGenerationImage implements ShouldQueue
         }
 
         $path = "generations/{$generation->pixelforge_id}.png";
+        // Do not pass visibility 'public': R2/Cloud Object Storage rejects per-object ACLs;
+        // bucket-level Public visibility already makes these URLs readable.
         Storage::disk(config('filesystems.generations'))->put($path, $png);
         $generation->forceFill(['image_path' => $path])->save();
     }

@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Http;
 class Pricing
 {
     public const MARKUP_NUMERATOR = 5;   // charge = cost * 5/4 = cost + 25%
+
     public const MARKUP_DENOMINATOR = 4;
 
     /** Fetch current pricing from Pixelforge (no auth needed), cached briefly. */

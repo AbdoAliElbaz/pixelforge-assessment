@@ -28,4 +28,18 @@ class RegistrationTest extends TestCase
         $this->assertAuthenticated();
         $response->assertRedirect(route('dashboard', absolute: false));
     }
+
+    public function test_registration_can_be_disabled_for_demo_lockdown(): void
+    {
+        config(['demo.allow_registration' => false]);
+
+        $this->get('/register')->assertNotFound();
+        $this->post('/register', [
+            'name' => 'Test User',
+            'email' => 'locked@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+        ])->assertNotFound();
+        $this->assertGuest();
+    }
 }

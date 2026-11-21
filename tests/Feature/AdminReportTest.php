@@ -129,4 +129,36 @@ class AdminReportTest extends TestCase
             ->where('reconciliation', null)
         );
     }
+
+    public function test_seeded_fixtures_are_excluded_from_spend_and_reconciliation(): void
+    {
+        config(['services.pixelforge.api_key' => 'test-key']);
+        $admin = User::factory()->create(['is_admin' => true]);
+        $user = User::factory()->create(['email' => 'customer@example.com']);
+        $today = now()->format('Y-m-d');
+
+        $real = $this->succeededGeneration($user, now()->toDateTimeString(), 50_412_500, 63_015_625);
+        $fixture = $this->succeededGeneration($user, now()->toDateTimeString(), 373_875_000, 467_343_750);
+        $fixture->forceFill(['is_fixture' => true, 'pixelforge_id' => 'gen_demo_succeeded'])->save();
+
+        Http::fake(['*/usage*' => Http::response([
+            'object' => 'usage',
+            'data' => [
+                ['date' => $today, 'generations' => 1, 'input_text_tokens' => 10, 'input_image_tokens' => 0, 'output_tokens' => 1100, 'reasoning_tokens' => 509, 'cost_usd' => '0.050412500'],
+            ],
+        ])]);
+
+        $this->actingAs($admin)->get('/admin')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('rows', 1)
+            ->where('rows.0.user', 'customer@example.com')
+            ->where('rows.0.generations', 1)
+            ->where('rows.0.cost', '0.0504125')
+            ->where('reconciliation.0.our_generations', 1)
+            ->where('reconciliation.0.our_cost', '0.0504125')
+            ->where('reconciliation.0.matches', true)
+        );
+
+        $this->assertDatabaseHas('generations', ['id' => $real->id, 'is_fixture' => false]);
+        $this->assertDatabaseHas('generations', ['id' => $fixture->id, 'is_fixture' => true]);
+    }
 }
