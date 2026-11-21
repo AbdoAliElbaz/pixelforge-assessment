@@ -37,6 +37,9 @@ class DatabaseSeeder extends Seeder
             return;
         }
 
+        // Demo history rows intentionally omit estimate_charge_* so the UI can
+        // show "Estimate unavailable" for pre-existing records.
+
         $rates = [
             'input_text_tokens' => '5.00',
             'input_image_tokens' => '10.00',

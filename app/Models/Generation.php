@@ -10,7 +10,8 @@ class Generation extends Model
     protected $fillable = [
         'user_id', 'pixelforge_id', 'idempotency_key', 'prompt', 'size', 'quality',
         'reference_images', 'status', 'error_code', 'error_message',
-        'rates', 'usage', 'provider_cost_nano', 'charge_nano', 'reserved_nano', 'image_path',
+        'rates', 'usage', 'provider_cost_nano', 'charge_nano', 'reserved_nano',
+        'estimate_charge_low_nano', 'estimate_charge_high_nano', 'image_path',
         'is_fixture', 'completed_at',
     ];
 

@@ -67,9 +67,58 @@ class GenerationSubmitTest extends TestCase
         $this->assertDatabaseHas('generations', [
             'pixelforge_id' => 'gen_abc',
             'status' => 'queued',
+            // Saved user-facing estimate (provider cost + 25% markup) at submit.
+            'estimate_charge_low_nano' => 58_137_500,
+            'estimate_charge_high_nano' => 86_275_000,
         ]);
 
         Http::assertSent(fn ($request) => $request->hasHeader('Idempotency-Key'));
+    }
+
+    public function test_generate_page_exposes_saved_estimate_and_marks_legacy_rows_unavailable(): void
+    {
+        Http::fake([
+            '*/generations' => Http::response([
+                'id' => 'gen_est', 'status' => 'queued', 'rates' => $this->rates,
+            ], 202),
+            '*/pricing' => Http::response($this->pricing),
+        ]);
+
+        $user = $this->fundedUser();
+
+        // Legacy / seeded-style row: succeeded with a charge but no saved estimate.
+        $user->generations()->create([
+            'pixelforge_id' => 'gen_legacy',
+            'idempotency_key' => 'legacy-key',
+            'prompt' => 'old demo image',
+            'size' => '1024x1024',
+            'quality' => 'medium',
+            'reference_images' => [],
+            'status' => 'succeeded',
+            'provider_cost_nano' => 50_300_000,
+            'charge_nano' => 62_875_000,
+            'completed_at' => now()->subDay(),
+        ]);
+
+        $this->actingAs($user)->post('/generate', [
+            'prompt' => 'a lighthouse',
+            'size' => '1024x1024',
+            'quality' => 'medium',
+        ])->assertRedirect(route('generate'));
+
+        $this->actingAs($user)
+            ->get('/generate')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Generate')
+                ->has('generations', 2)
+                ->where('generations.0.estimate_charge_low', '0.0581375')
+                ->where('generations.0.estimate_charge_high', '0.086275')
+                ->where('generations.0.charge', null)
+                ->where('generations.1.estimate_charge_low', null)
+                ->where('generations.1.estimate_charge_high', null)
+                ->where('generations.1.charge', '0.062875')
+            );
     }
 
     public function test_content_policy_rejection_creates_nothing_and_charges_nothing(): void

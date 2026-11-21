@@ -353,19 +353,34 @@ function formatAbsolute(iso) {
                         <p v-if="g.error_message" class="border-t border-red-100 bg-red-50 px-4 py-2 text-sm text-red-700">
                             {{ g.error_message }}
                         </p>
-                        <div v-if="g.status === 'succeeded'" class="border-t border-gray-100">
-                            <p class="px-4 py-2 text-sm text-gray-700">
-                                Charged
-                                <span class="font-semibold tabular-nums">${{ g.charge }}</span>
-                                <span class="text-gray-500">(provider ${{ g.provider_cost }})</span>
+                        <div
+                            v-if="g.estimate_charge_low != null || g.status === 'succeeded'"
+                            class="border-t border-gray-100 px-4 py-2 text-sm text-gray-700"
+                        >
+                            <p>
+                                <template v-if="g.estimate_charge_low != null && g.estimate_charge_high != null">
+                                    <span class="text-gray-500">Estimate</span>
+                                    <span class="ml-1 font-semibold tabular-nums">
+                                        ${{ g.estimate_charge_low }} – ${{ g.estimate_charge_high }}
+                                    </span>
+                                </template>
+                                <template v-else>
+                                    <span class="text-gray-500">Estimate unavailable</span>
+                                </template>
+                                <template v-if="g.status === 'succeeded' && g.charge != null">
+                                    <span class="mx-1.5 text-gray-300">·</span>
+                                    Charged
+                                    <span class="font-semibold tabular-nums">${{ g.charge }}</span>
+                                    <span class="text-gray-500">(provider ${{ g.provider_cost }})</span>
+                                </template>
                             </p>
-                            <img
-                                v-if="g.image_url"
-                                :src="g.image_url"
-                                alt="Generated image"
-                                class="max-h-80 w-full object-contain bg-gray-50"
-                            />
                         </div>
+                        <img
+                            v-if="g.status === 'succeeded' && g.image_url"
+                            :src="g.image_url"
+                            alt="Generated image"
+                            class="max-h-80 w-full object-contain bg-gray-50"
+                        />
                     </div>
                 </div>
             </div>

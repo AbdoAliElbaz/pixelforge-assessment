@@ -61,6 +61,8 @@ class GenerationService
                 'reference_images' => $referenceImages,
                 'status' => 'pending_submit',
                 'reserved_nano' => $estimate['charge_high_nano'],
+                'estimate_charge_low_nano' => $estimate['charge_low_nano'],
+                'estimate_charge_high_nano' => $estimate['charge_high_nano'],
             ]);
         });
 
@@ -115,6 +117,12 @@ class GenerationService
             'error_message' => $g->error_message,
             'charge' => $g->charge_nano !== null ? Pricing::format($g->charge_nano) : null,
             'provider_cost' => $g->provider_cost_nano !== null ? Pricing::format($g->provider_cost_nano) : null,
+            'estimate_charge_low' => $g->estimate_charge_low_nano !== null
+                ? Pricing::format($g->estimate_charge_low_nano)
+                : null,
+            'estimate_charge_high' => $g->estimate_charge_high_nano !== null
+                ? Pricing::format($g->estimate_charge_high_nano)
+                : null,
             'image_url' => $g->image_path ? $this->imageUrl($g->image_path) : null,
             'created_at' => $g->created_at->toIso8601String(),
         ];
