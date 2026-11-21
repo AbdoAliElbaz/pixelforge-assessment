@@ -4,6 +4,7 @@ use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 
@@ -26,4 +27,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // Inertia: keep the generate form filled and show a friendly retry message
+        // instead of the raw "429 Too Many Requests" error overlay.
+        $exceptions->render(function (ThrottleRequestsException $e, Request $request) {
+            if (! $request->header('X-Inertia')) {
+                return null;
+            }
+
+            $seconds = (int) ($e->getHeaders()['Retry-After'] ?? 60);
+
+            return back()->withErrors([
+                'throttle' => "You're submitting too quickly. Please wait {$seconds} seconds and try again — your prompt was not sent.",
+            ]);
+        });
     })->create();

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;
 
@@ -11,12 +12,18 @@ use Illuminate\Support\Facades\Http;
  * Two behaviours matter here:
  *  - POST /generations is retried on 429/503 (the provider is flaky on purpose),
  *    always with the same Idempotency-Key, so a retry can never double-create
- *    or double-bill a generation. Retry-After is respected and retries are capped.
- *  - Everything else is a plain call.
+ *    or double-bill a generation. Retry-After is respected in full; short waits
+ *    sleep inline, longer waits are returned so the caller can defer.
+ *  - Connection/timeout failures return an "uncertain" result: the provider may
+ *    already have accepted the request, so callers must retry the same key
+ *    rather than refunding or minting a new key.
  */
 class PixelforgeClient
 {
     private const MAX_SUBMIT_ATTEMPTS = 4;
+
+    /** Inline sleeps above this are deferred to a queued retry instead. */
+    private const MAX_INLINE_RETRY_AFTER = 10;
 
     private function request(): PendingRequest
     {
@@ -30,7 +37,9 @@ class PixelforgeClient
      * Submit a generation. Returns a result array:
      *  ['ok' => true, 'generation' => [...]]                       accepted (202, maybe idempotent replay)
      *  ['ok' => false, 'code' => 'content_policy_violation', ...]  rejected, nothing created
-     *  ['ok' => false, 'code' => 'unavailable', ...]               gave up after capped retries
+     *  ['ok' => false, 'code' => 'retry_later', 'retry_after' => n] provider asked for a long wait
+     *  ['ok' => false, 'code' => 'uncertain', ...]                  transport failure; outcome unknown
+     *  ['ok' => false, 'code' => 'unavailable', ...]               gave up after capped short retries
      */
     public function createGeneration(array $params, string $idempotencyKey): array
     {
@@ -39,9 +48,18 @@ class PixelforgeClient
 
         while ($attempt < self::MAX_SUBMIT_ATTEMPTS) {
             $attempt++;
-            $lastResponse = $this->request()
-                ->withHeaders(['Idempotency-Key' => $idempotencyKey])
-                ->post('/generations', $params);
+
+            try {
+                $lastResponse = $this->request()
+                    ->withHeaders(['Idempotency-Key' => $idempotencyKey])
+                    ->post('/generations', $params);
+            } catch (ConnectionException) {
+                return [
+                    'ok' => false,
+                    'code' => 'uncertain',
+                    'message' => 'The connection to Pixelforge was interrupted before we could confirm acceptance. We will retry the same request; you will not be charged twice.',
+                ];
+            }
 
             if ($lastResponse->status() === 202) {
                 return ['ok' => true, 'generation' => $lastResponse->json()];
@@ -49,11 +67,22 @@ class PixelforgeClient
 
             $code = $lastResponse->json('error.code');
 
-            // Retryable provider-side conditions only; respect Retry-After, back off.
+            // Retryable provider-side conditions only; respect Retry-After in full.
             if (in_array($lastResponse->status(), [429, 503], true)) {
-                $wait = min((int) $lastResponse->header('Retry-After', 1), 10);
+                $wait = max(1, (int) $lastResponse->header('Retry-After', 1));
+
+                // Do not truncate long delays or retry early: surface for deferred retry.
+                if ($wait > self::MAX_INLINE_RETRY_AFTER) {
+                    return [
+                        'ok' => false,
+                        'code' => 'retry_later',
+                        'retry_after' => $wait,
+                        'message' => $lastResponse->json('error.message') ?? 'Pixelforge asked us to wait before retrying.',
+                    ];
+                }
+
                 if ($attempt < self::MAX_SUBMIT_ATTEMPTS) {
-                    sleep(max(1, $wait));
+                    sleep($wait);
 
                     continue;
                 }

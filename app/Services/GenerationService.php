@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\RecoverPendingSubmit;
 use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,10 @@ use Illuminate\Support\Str;
 /**
  * Submit flow: estimate guard, reserve-then-settle hold, Pixelforge create.
  * Settlement of the hold happens later in GenerationState on success/failure.
+ *
+ * Transport failures and long Retry-After delays leave the row in pending_submit
+ * with the hold intact. Recovery always reuses the stored idempotency key and
+ * original parameters; refunds only happen after a definitive provider outcome.
  */
 class GenerationService
 {
@@ -76,33 +81,123 @@ class GenerationService
             ];
         }
 
-        $result = $this->client->createGeneration([
-            'prompt' => $data['prompt'],
-            'size' => $data['size'],
-            'quality' => $data['quality'],
-            'reference_images' => $referenceImages,
-            'metadata' => ['generation_id' => (string) $generation->id],
-        ], $generation->idempotency_key);
-
-        if ($result['ok']) {
-            $remote = $result['generation'];
-            $generation->fill([
-                'pixelforge_id' => $remote['id'],
-                'status' => $remote['status'] ?? 'queued',
-                'rates' => $remote['rates'] ?? null,
-            ])->save();
-        } else {
-            $generation->fill([
-                'status' => $result['code'] === 'unavailable' ? 'submit_failed' : 'rejected',
-                'error_code' => $result['code'],
-                'error_message' => $result['message'],
-                'reserved_nano' => 0,
-            ])->save();
-
-            $user->increment('balance_nano', $estimate['charge_high_nano']);
-        }
+        $this->attemptProviderSubmit($generation);
 
         return ['ok' => true];
+    }
+
+    /**
+     * Re-attempt provider submission for a stuck pending_submit row.
+     * Safe to repeat: same idempotency key, settle/refund only after a known outcome.
+     */
+    public function recoverPendingSubmit(Generation $generation): void
+    {
+        $generation->refresh();
+
+        if ($generation->status !== 'pending_submit') {
+            return;
+        }
+
+        if ($generation->submit_after !== null && $generation->submit_after->isFuture()) {
+            return;
+        }
+
+        $this->attemptProviderSubmit($generation);
+    }
+
+    private function attemptProviderSubmit(Generation $generation): void
+    {
+        $result = $this->client->createGeneration(
+            $this->providerParams($generation),
+            $generation->idempotency_key,
+        );
+
+        $this->applySubmitResult($generation, $result);
+    }
+
+    /** @return array{prompt: string, size: string, quality: string, reference_images: array, metadata: array{generation_id: string}} */
+    private function providerParams(Generation $generation): array
+    {
+        return [
+            'prompt' => $generation->prompt,
+            'size' => $generation->size,
+            'quality' => $generation->quality,
+            'reference_images' => array_values($generation->reference_images ?? []),
+            'metadata' => ['generation_id' => (string) $generation->id],
+        ];
+    }
+
+    private function applySubmitResult(Generation $generation, array $result): void
+    {
+        if ($result['ok']) {
+            $remote = $result['generation'];
+
+            DB::transaction(function () use ($generation, $remote) {
+                $locked = Generation::whereKey($generation->id)->lockForUpdate()->first();
+                if ($locked === null || $locked->status !== 'pending_submit') {
+                    return;
+                }
+
+                $locked->fill([
+                    'pixelforge_id' => $remote['id'],
+                    'status' => 'queued',
+                    'rates' => $remote['rates'] ?? null,
+                    'error_code' => null,
+                    'error_message' => null,
+                    'submit_after' => null,
+                ])->save();
+            });
+
+            $generation->refresh();
+            if ($generation->status !== 'pending_submit' && $generation->pixelforge_id !== null) {
+                GenerationState::apply($generation, $remote);
+            }
+
+            return;
+        }
+
+        $code = $result['code'] ?? 'unknown';
+
+        if (in_array($code, ['uncertain', 'retry_later'], true)) {
+            $delay = $code === 'retry_later'
+                ? max(1, (int) ($result['retry_after'] ?? 1))
+                : 5;
+
+            $generation->forceFill([
+                'submit_after' => now()->addSeconds($delay),
+                'error_code' => $code,
+                'error_message' => $result['message'] ?? null,
+            ])->save();
+
+            RecoverPendingSubmit::dispatch($generation->id)
+                ->delay(now()->addSeconds($delay));
+
+            return;
+        }
+
+        DB::transaction(function () use ($generation, $result, $code) {
+            $locked = Generation::whereKey($generation->id)->lockForUpdate()->first();
+            if ($locked === null || $locked->status !== 'pending_submit') {
+                return;
+            }
+
+            $reserved = $locked->reserved_nano ?? 0;
+            $locked->fill([
+                'status' => $code === 'unavailable' ? 'submit_failed' : 'rejected',
+                'error_code' => $code,
+                'error_message' => $result['message'] ?? null,
+                'reserved_nano' => 0,
+                'submit_after' => null,
+            ])->save();
+
+            if ($reserved > 0) {
+                $user = User::whereKey($locked->user_id)->lockForUpdate()->first();
+                if ($user !== null) {
+                    $user->balance_nano += $reserved;
+                    $user->save();
+                }
+            }
+        });
     }
 
     /** Shape a generation row for the Generate page. */

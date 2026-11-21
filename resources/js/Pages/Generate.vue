@@ -66,8 +66,30 @@ function removeReferenceImage(index) {
     form.reference_images.splice(index, 1);
 }
 
+const throttleBlocked = ref(false);
+const throttleMessage = computed(
+    () => form.errors.throttle || page.props.errors?.throttle || null,
+);
+let throttleTimer = null;
+
+watch(throttleMessage, (message) => {
+    clearTimeout(throttleTimer);
+    if (!message) {
+        throttleBlocked.value = false;
+        return;
+    }
+    throttleBlocked.value = true;
+    const match = String(message).match(/(\d+)\s+seconds?/i);
+    const seconds = match ? Number(match[1]) : 60;
+    throttleTimer = setTimeout(() => {
+        throttleBlocked.value = false;
+        form.clearErrors('throttle');
+    }, seconds * 1000);
+});
+onBeforeUnmount(() => clearTimeout(throttleTimer));
+
 function submit() {
-    if (!canAfford.value) {
+    if (!canAfford.value || throttleBlocked.value) {
         return;
     }
     form.reference_images = form.reference_images.filter(Boolean);
@@ -301,14 +323,21 @@ function formatAbsolute(iso) {
                             Buy credits above, or lower size/quality.
                         </p>
                         <p v-if="form.errors.balance" class="mt-2 text-sm text-red-600">{{ form.errors.balance }}</p>
+                        <p
+                            v-if="throttleMessage"
+                            class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                            role="status"
+                        >
+                            {{ throttleMessage }}
+                        </p>
                     </div>
 
                     <button
                         type="submit"
-                        :disabled="form.processing || form.prompt.trim() === '' || !canAfford || estimating"
+                        :disabled="form.processing || form.prompt.trim() === '' || !canAfford || estimating || throttleBlocked"
                         class="inline-flex w-full items-center justify-center rounded-md bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
                     >
-                        {{ form.processing ? 'Submitting…' : 'Generate' }}
+                        {{ form.processing ? 'Submitting…' : throttleBlocked ? 'Please wait…' : 'Generate' }}
                     </button>
                 </form>
 
