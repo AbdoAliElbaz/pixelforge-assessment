@@ -6,29 +6,37 @@ use App\Models\Generation;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
+/**
+ * Demo accounts (password "password123") + sample generations.
+ * Does not use factories/Faker so `migrate --seed` works with --no-dev on Cloud.
+ */
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Local demo data only: two throwaway accounts (password "password123")
-     * and a few generations so the generate page and admin report show
-     * something on first run. Never use these in a real deployment.
-     */
     public function run(): void
     {
-        $demo = User::factory()->create([
-            'name' => 'Demo User',
-            'email' => 'demo@example.com',
-            'password' => 'password123',
-            'balance_nano' => 5_000_000_000,
-        ]);
+        $demo = User::query()->updateOrCreate(
+            ['email' => 'demo@example.com'],
+            [
+                'name' => 'Demo User',
+                'password' => 'password123',
+                'balance_nano' => 5_000_000_000,
+                'is_admin' => false,
+            ],
+        );
 
-        User::factory()->create([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-            'password' => 'password123',
-            'is_admin' => true,
-            'balance_nano' => 5_000_000_000,
-        ]);
+        User::query()->updateOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'name' => 'Admin User',
+                'password' => 'password123',
+                'balance_nano' => 5_000_000_000,
+                'is_admin' => true,
+            ],
+        );
+
+        if ($demo->generations()->exists()) {
+            return;
+        }
 
         $rates = [
             'input_text_tokens' => '5.00',
@@ -37,8 +45,6 @@ class DatabaseSeeder extends Seeder
             'reasoning_tokens' => '12.50',
         ];
 
-        // The docs' worked example: maximum-cost high 1536x1024 with 2 reference
-        // images: cost $0.373875, charge $0.46734375. Seeded as completed today.
         $usage = [
             'input_text_tokens' => 115,
             'input_image_tokens' => 1530,
